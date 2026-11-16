@@ -1,4 +1,4 @@
-name: build-apk
+  name: build-apk
 
 on:
   push:
@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: v1.1.2
+          ref: 2eaf35899475bcba631ddfbacd610bc9164ae823
 
       - uses: actions/setup-java@v5
         with:
@@ -144,4 +144,4 @@ jobs:
         with:
           name: SimpleChat-debug
           path: app/build/outputs/apk/**/*.apk
-          if-no-files-found: error
+          if-no-files-found: error            
