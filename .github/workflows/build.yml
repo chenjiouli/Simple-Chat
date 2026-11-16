@@ -13,6 +13,15 @@ jobs:
         with:
           ref: 2eaf35899475bcba631ddfbacd610bc9164ae823
 
+      - name: Fetch cover image
+        run: |
+          for f in cover_full.jpg cover.jpg cover.png; do
+            if curl -fsSL -o "$f" "https://raw.githubusercontent.com/${{ github.repository }}/main/$f"; then
+              echo "拿到封面图: $f"
+              break
+            fi
+          done
+
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -35,7 +44,7 @@ jobs:
 
       - name: Make launcher icons
         run: |
-          IMG=$(ls cover*.jpg cover*.jpeg cover*.png 2>/dev/null | head -1)
+          IMG=$(ls cover*.jpg cover*.png 2>/dev/null | head -1)
           if [ -z "$IMG" ]; then echo "::warning::没找到封面图，保留原图标"; exit 0; fi
           echo "使用封面图: $IMG"
           python3 -m pip install --quiet pillow
