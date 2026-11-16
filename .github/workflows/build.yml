@@ -33,6 +33,30 @@ jobs:
           yes | "$SDKMAN" --licenses > /dev/null || true
           "$SDKMAN" "platform-tools" "platforms;android-37" "build-tools;37.0.0" || "$SDKMAN" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
+      - name: Make launcher icons
+        run: |
+          python3 -m pip install --quiet pillow
+          python3 - <<'PY'
+          from PIL import Image
+          import os
+          im = Image.open("cover.jpg").convert("RGB")
+          W, H = im.size
+          body = im.crop((0, 0, W, H - int(H * 0.12)))
+          bw, bh = body.size
+          side = min(bw, bh)
+          top = max(0, int((bh - side) * 0.32))
+          sq = body.crop(((bw - side) // 2, top, ((bw - side) // 2) + side, top + side))
+          for name, px in [("mdpi",108),("hdpi",162),("xhdpi",216),("xxhdpi",324),("xxxhdpi",432)]:
+              d = "app/src/main/res/mipmap-" + name
+              os.makedirs(d, exist_ok=True)
+              c = Image.new("RGB", (px, px), (255, 255, 255))
+              s = int(px * 0.92)
+              c.paste(sq.resize((s, s), Image.LANCZOS), ((px - s)//2, (px - s)//2))
+              c.save(d + "/ic_launcher_foreground.png", optimize=True)
+          PY
+          f=app/src/main/res/drawable/ic_launcher_background.xml
+          [ -f "$f" ] && sed -i 's/#FFF3F5F8/#FFFFFFFF/g; s/#F3F5F8/#FFFFFFFF/g' "$f"
+
       - name: Build debug
         run: |
           chmod +x gradlew
