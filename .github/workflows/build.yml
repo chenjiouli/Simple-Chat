@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: v1.1.2
 
       - uses: actions/setup-java@v5
         with:
@@ -33,33 +35,105 @@ jobs:
           "$SDKMAN" "platform-tools" "platforms;android-37" "build-tools;37.0.0" \
             || "$SDKMAN" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
-      - name: Make launcher icons
-        if: hashFiles('cover.jpg') != ''
+      - name: Inject crash catcher
         run: |
-          python3 -m pip install --quiet pillow
-          python3 - <<'PY'
-          from PIL import Image
-          import os
-          im = Image.open("cover.jpg").convert("RGB")
-          W, H = im.size
-          body = im.crop((0, 0, W, H - int(H * 0.12)))
-          bw, bh = body.size
-          side = min(bw, bh)
-          top = max(0, int((bh - side) * 0.32))
-          sq = body.crop(((bw - side) // 2, top, ((bw - side) // 2) + side, top + side))
-          for name, px in [("mdpi",108),("hdpi",162),("xhdpi",216),("xxhdpi",324),("xxxhdpi",432)]:
-              d = f"app/src/main/res/mipmap-{name}"
-              os.makedirs(d, exist_ok=True)
-              c = Image.new("RGB", (px, px), (255, 255, 255))
-              s = int(px * 0.92)
-              c.paste(sq.resize((s, s), Image.LANCZOS), ((px - s)//2, (px - s)//2))
-              c.save(f"{d}/ic_launcher_foreground.png", optimize=True)
-          PY
+          cat > app/src/main/java/com/simplechat/app/App.kt <<'KOTLIN'
+          package com.simplechat.app
 
-      - name: White icon background
-        run: |
-          f=app/src/main/res/drawable/ic_launcher_background.xml
-          [ -f "$f" ] && sed -i 's/#FFF3F5F8/#FFFFFFFF/g; s/#F3F5F8/#FFFFFFFF/g' "$f"
+          import android.app.Application
+          import android.content.ContentValues
+          import android.content.Context
+          import android.os.Build
+          import android.provider.MediaStore
+          import com.simplechat.app.data.ChatRepository
+          import com.simplechat.app.data.LocaleHelper
+          import com.simplechat.app.data.Res
+          import com.simplechat.app.data.SettingsStore
+          import com.simplechat.app.db.AppDatabase
+          import com.simplechat.app.net.ChatApi
+          import com.simplechat.app.net.SseClient
+          import com.simplechat.app.net.anthropic.AnthropicApi
+          import kotlinx.coroutines.CoroutineScope
+          import kotlinx.coroutines.Dispatchers
+          import kotlinx.coroutines.launch
+          import kotlinx.serialization.json.Json
+          import okhttp3.OkHttpClient
+          import java.io.File
+          import java.text.SimpleDateFormat
+          import java.util.Date
+          import java.util.Locale
+
+          class App : Application() {
+
+              lateinit var container: AppContainer
+                  private set
+
+              override fun attachBaseContext(newBase: Context) {
+                  installCrashCatcher(newBase)
+                  super.attachBaseContext(LocaleHelper.wrapAppBase(newBase))
+              }
+
+              override fun onCreate() {
+                  super.onCreate()
+                  Res.init(this)
+                  container = AppContainer(this)
+                  CoroutineScope(Dispatchers.IO).launch {
+                      container.settingsStore.migrateLegacyApiKey()
+                  }
+              }
+
+              private fun installCrashCatcher(ctx: Context) {
+                  val previous = Thread.getDefaultUncaughtExceptionHandler()
+                  Thread.setDefaultUncaughtExceptionHandler { t, e ->
+                      runCatching {
+                          val text = buildString {
+                              appendLine("time=" + SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date()))
+                              appendLine("device=" + Build.MANUFACTURER + " " + Build.MODEL +
+                                  " android=" + Build.VERSION.RELEASE + " api=" + Build.VERSION.SDK_INT)
+                              appendLine("thread=" + t.name)
+                              appendLine(e.stackTraceToString())
+                              e.cause?.let { appendLine("--- cause ---"); appendLine(it.stackTraceToString()) }
+                          }
+                          ctx.getExternalFilesDir(null)?.let { dir ->
+                              dir.mkdirs()
+                              File(dir, "crash.txt").writeText(text)
+                          }
+                          if (Build.VERSION.SDK_INT >= 29) {
+                              val cv = ContentValues().apply {
+                                  put(MediaStore.Downloads.DISPLAY_NAME, "simplechat-crash.txt")
+                                  put(MediaStore.Downloads.MIME_TYPE, "text/plain")
+                              }
+                              ctx.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv)?.let { uri ->
+                                  ctx.contentResolver.openOutputStream(uri)?.use { it.write(text.toByteArray()) }
+                              }
+                          }
+                      }
+                      previous?.uncaughtException(t, e)
+                  }
+              }
+          }
+
+          class AppContainer(private val app: Application) {
+
+              val json: Json by lazy { ChatApi.defaultJson() }
+
+              val httpClient: OkHttpClient by lazy { ChatApi.defaultClient() }
+
+              private val sseClient: SseClient by lazy { SseClient(httpClient, json) }
+
+              private val anthropicApi: AnthropicApi by lazy { AnthropicApi(httpClient, json) }
+
+              val chatApi: ChatApi by lazy { ChatApi(httpClient, sseClient, anthropicApi, json) }
+
+              val settingsStore: SettingsStore by lazy { SettingsStore(app) }
+
+              val database: AppDatabase by lazy { AppDatabase.build(app) }
+
+              val chatRepository: ChatRepository by lazy { ChatRepository(database, app) }
+
+              val openCodeSessionId: String by lazy { java.util.UUID.randomUUID().toString() }
+          }
+          KOTLIN
 
       - name: Build debug
         run: |
