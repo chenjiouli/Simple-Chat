@@ -1,81 +1,88 @@
-name: build-apk
+姓名: build-apk
 
-on:
-  push:
-    branches: [ main, master ]
-  workflow_dispatch:
+在……之上:
+推:
+分支机构: [主要的,掌握]
+workflow_dispatch:
 
-jobs:
-  apk:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: 2eaf35899475bcba631ddfbacd610bc9164ae823
+招聘:
+安装包:
+连续的: Ubuntu-最新
+步骤:
+      - uses: 操作/结帐@v4
+和……一起:
+裁判: 2eaf35899475bcba631ddfbacd610bc9164ae823
 
-      - name: Fetch cover image
-        run: |
-          for f in cover_full.jpg cover.jpg cover.png; do
-            if curl -fsSL -o "$f" "https://raw.githubusercontent.com/${{ github.repository }}/main/$f"; then
-              echo "拿到封面图: $f"
-              break
+      - 姓名: 获取封面图像
+跑: |
+f在cover_full.jpg cover中。JPG cover.png；do
+if curl-fsSL-o"$f""https://raw.githubusercontent.com/${{github.repository}/main/$f"；然后
+echo"拿到封面图：$F"；break
             fi
-          done
+完成
+
+      姓名错误姓名: 提升附件限制
+跑: |
+F=app/src/main/java/com/simplechat/app/data/AttachmentImport.kt
+SED-i's/const val TEXT_MAX_CHARS=100_000/const val TEXT_MAX_CHARS=500_000/'$F
+SED-i的/专用常量值PDF_MAX_PAGES=12/专用常量值PDF_MAX_PAGES=40/'$F
+回声"--- 改后的上限 ---"
+grep-nE"TEXT_MAX_CHARS=|PDF_MAX_PAGES="$F
 
       - uses: actions/setup-java@v5
-        with:
+和……一起:
           distribution: temurin
           java-version: '17'
 
-      - name: Android SDK
-        run: |
+      - 姓名: Android SDK
+跑: |
           export ANDROID_HOME="$HOME/android-sdk"
           export ANDROID_SDK_ROOT="$ANDROID_HOME"
           echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
           mkdir -p "$ANDROID_HOME/cmdline-tools"
           curl -sSLo "$RUNNER_TEMP/cli.zip" https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-          unzip -q "$RUNNER_TEMP/cli.zip" -d "$RUNNER_TEMP/cli"
-          mv "$RUNNER_TEMP/cli/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
-          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-          SDKMAN="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          yes | "$SDKMAN" --licenses > /dev/null || true
-          "$SDKMAN" "platform-tools" "platforms;android-37" "build-tools;37.0.0" || "$SDKMAN" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+unzip-q"$RUNNER_TEMP/cli.zip"-d"$RUNNER_TEMP/cli"
+MV"$RUNNER_TEMP/cli/cmdline-tools""$ANDROID_HOME/cmdline-tools/last"
+回声"$ANDROID_HOME/cmdline-tools/last/bin" >> "$GITHUB_PATH"
+SdkMan="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+是|"$SdkMan"没有任何的
+"$SdkMan""平台工具""平台；android-37""生成工具；37.0.0"||"$SdkMan""平台工具""平台；android-36""build-tools；36.0.0"
 
-      - name: Make launcher icons
-        run: |
-          IMG=$(ls cover*.jpg cover*.png 2>/dev/null | head -1)
-          if [ -z "$IMG" ]; then echo "::warning::没找到封面图，保留原图标"; exit 0; fi
+      - 姓名: 制作启动器图标
+跑: |
+IMG=$(ls cover*.jpg cover*.png2>/dev/null|head-1)
+如果[-z"$IMG"]；循回声"：：warning：：没找到封面图，保留原图标"；退出0；fi
           echo "使用封面图: $IMG"
-          python3 -m pip install --quiet pillow
-          COVER="$IMG" python3 - <<'PY'
-          from PIL import Image
-          import os
-          im = Image.open(os.environ["COVER"]).convert("RGB")
+python3 -m pip 安装 --quiet 枕头
+覆盖="$IMG"没有'PY'
+从PIL导入图像
+导入
+在"RGB"字符串中,输入"RGB"字符
           W, H = im.size
-          body = im.crop((0, 0, W, H - int(H * 0.12)))
-          bw, bh = body.size
-          side = min(bw, bh)
-          top = max(0, int((bh - side) * 0.32))
-          sq = body.crop(((bw - side) // 2, top, ((bw - side) // 2) + side, top + side))
-          for name, px in [("mdpi",108),("hdpi",162),("xhdpi",216),("xxhdpi",324),("xxxhdpi",432)]:
-              d = "app/src/main/res/mipmap-" + name
-              os.makedirs(d, exist_ok=True)
-              c = Image.new("RGB", (px, px), (255, 255, 255))
-              s = int(px * 0.92)
-              c.paste(sq.resize((s, s), Image.LANCZOS), ((px - s)//2, (px - s)//2))
-              c.save(d + "/ic_launcher_foreground.png", optimize=True)
-          PY
-          f=app/src/main/res/drawable/ic_launcher_background.xml
-          [ -f "$f" ] && sed -i 's/#FFF3F5F8/#FFFFFFFF/g; s/#F3F5F8/#FFFFFFFF/g' "$f"
+body=im.crop((0，0，W，H-int(H*0.12)))
+BW，bh=车身尺寸
+侧面=最小(bw，bh)
+top=max(0，int((bh侧)*0.32))
+sq=body.crop(体积)//2，top，(体积)//2)+side，top+side))
+对于名称，px in[("mdpi"，108)，("hdpi"，162)，("XHDPI"，216)，("xxhdpi"，324)，("XXXHDPI"，432)]:
+D="应用程序/src/main/res/mipmap-"+名称
+没有任何其他信息.
+C=Image.new("RGB", (px, px), (255, 255, 255))
+s=int(px*0.92)
+图像中的每一个字符都是一个字符.
+c.save(d+"/ic_launcher_prospective.png"，optimize=True)
+py
+F=app/src/main/res/drawable/ic_launcher_background.xml
+[-f"$f"]&&sed-i's/#FFFF3F5F8/#FFFFFFFF/g；s/#F3F5F8/#FFFFFFFF/g'"$f"[-f"$f" ]&&sed-i's/#FFFF3F5F8/#FFFFFFFF/g；s/#F3F5F8/#FFFFFFFF/g' "$f"
 
-      - name: Build debug
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+      - 姓名: 生成版本
+跑: |
+chmod+x gradlew
+./gradlew程序集释放-无守护程序-stacktrace
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: SimpleChat-debug
-          path: app/build/outputs/apk/**/*.apk
-          if-no-files-found: error
+      - uses: 操作/上载工件@v4
+和……一起:
+姓名: SimpleChat-release
+路径: app/build/outputs/apk/**/*.apk
+if-no-file-found: 错误
